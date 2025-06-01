@@ -1,14 +1,11 @@
 package com.example.apitest.controller;
 
+import com.example.apitest.dto.SignRequestDTO;
 import com.example.apitest.cache.TokenHolder;
 import com.example.apitest.service.UcanSignService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.io.IOException;
 
@@ -51,6 +48,18 @@ public class TestController {
     public ResponseEntity<String>sendCustomSign(){
         String response = ucanSignService.signRequest();
         return ResponseEntity.ok(response);
+
+    }
+
+    // 전자서명 페이지 생성 테스트
+    @PostMapping("/create")
+    public ResponseEntity<String>createSignPage(@RequestBody SignRequestDTO signRequestDTO){
+        try {
+            String signPageUrl = ucanSignService.createSignRequest(signRequestDTO);
+            return ResponseEntity.ok(signPageUrl);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("서명 생성 실패: " + e.getMessage());
+        }
 
     }
 

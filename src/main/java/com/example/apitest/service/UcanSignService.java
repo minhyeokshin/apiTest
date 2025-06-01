@@ -1,6 +1,9 @@
 package com.example.apitest.service;
 
+import com.example.apitest.dto.SignRequestDTO;
 import com.example.apitest.cache.TokenHolder;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -22,6 +25,9 @@ public class UcanSignService {
 
     @Value("${uCanSignKey}")
     private String apiKey;
+
+    private static final String API_URL = "https://app.ucansign.com/openapi/embedding/sign-creating";
+    private final OkHttpClient httpClient = new OkHttpClient();
 
     @Scheduled(initialDelay = 0, fixedRate = 1200000) // 20분 = 1,200,000ms
     public void sendTokenRequest() {
@@ -173,61 +179,62 @@ public class UcanSignService {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+
+
     }
 
-    // 문서 정보 커스텀
-//    public String customDocument(){
-//        OkHttpClient client = new OkHttpClient();
-//
-//        String templateId = "1927294313194180609";
-//        String token = TokenHolder.getToken();
-//
-//        MediaType mediaType = MediaType.parse("application/json");
-//
-//        String jsonBody = "{\n" +
-//                "  \"documentName\": \"거래 계약서\",\n" +
-//                "  \"folderId\": 102937427356,\n" +
-//                "  \"configExpireMinute\": 2880,\n" +
-//                "  \"documentPassword\": \"abcd1234!@#$\",\n" +
-//                "  \"configExpireReminderDay\": 3,\n" +
-//                "  \"reservationDate\": \"2024-06-14 09:00:00\",\n" +
-//                "  \"participants\": [\n" +
-//                "    {\n" +
-//                "      \"name\": \"홍길동\",\n" +
-//                "      \"signingMethodType\": \"kakao\",\n" +
-//                "      \"signingContactInfo\": \"01012345678\",\n" +
-//                "      \"signingOrder\": 1\n" +
-//                "    },\n" +
-//                "    {\n" +
-//                "      \"name\": \"김유캔\",\n" +
-//                "      \"signingMethodType\": \"email\",\n" +
-//                "      \"signingContactInfo\": \"abcd@email.com\",\n" +
-//                "      \"signingOrder\": 2\n" +
-//                "    }\n" +
-//                "  ]\n" +
-//                "}";
-//        RequestBody body = RequestBody.create(mediaType, jsonBody);
-//
-//        Request request = new Request.Builder()
-//                .url("https://app.ucansign.com/openapi/templates/" + templateId)
-//                .post(body)
-//                .addHeader("Authorization", "Bearer " + token)
-//                .addHeader("Content-Type", "application/json")
-//                .addHeader("x-ucansign-test", "true") // 테스트용
-//                .build();
-//
-//        try (Response response = client.newCall(request).execute()) {
-//            if (response.isSuccessful()) {
-//                return response.body().string();
-//            } else {
-//                throw new RuntimeException("UCanSign 요청 실패: " + response.code() + "\n" + response.body().string());
-//            }
-//        } catch (IOException e) {
-//            throw new RuntimeException(e);
-//        }
-//
-//
-//    }
+
+    //진짜 서명 페이지 요청
+    public String createSignRequest(SignRequestDTO signRequestDTO) {
+        String bearerToken = TokenHolder.getToken();
+
+        MediaType mediaType = MediaType.parse("application/json");
+        String requestBodyJson = String.format(
+                "{\"redirectUrl\":\"%s\",\"customValue\":\"%s\"}",
+                signRequestDTO.getRedirectUrl(),
+                signRequestDTO.getCustomValue() != null ? signRequestDTO.getCustomValue() : ""
+        );
+
+        RequestBody body = RequestBody.create(mediaType, requestBodyJson);
+
+        Request request = new Request.Builder()
+                .url(API_URL)
+                .method("POST", body)
+                .addHeader("Authorization", "Bearer " + bearerToken)
+                .addHeader("Content-Type", "application/json")
+                .addHeader("x-ucansign-test", "true")
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (response.isSuccessful() && response.body() != null) {
+                String responseBody = response.body().string();
+
+                // JSON 파싱
+                ObjectMapper objectMapper = new ObjectMapper();
+                JsonNode root = objectMapper.readTree(responseBody);
+                int code = root.path("code").asInt();
+
+                if (code == 0) {
+                    String url = root.path("result").path("url").asText();
+                    return url;
+                } else {
+                    throw new RuntimeException("유캔사인 API 호출 실패: " + root.path("msg").asText());
+                }
+            } else {
+                throw new RuntimeException("유캔사인 API 호출 실패 (HTTP " + response.code() + ")");
+            }
+        } catch (JsonMappingException e) {
+            throw new RuntimeException(e);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+
+    }
+
+
 
 
 }
