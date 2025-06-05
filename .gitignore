@@ -37,3 +37,6 @@ out/
 .vscode/
 
 **/application-secret.properties
+
+# 예: src/main/resources/application-secret.properties 에 있을 경우
+/src/main/resources/application-secret.properties
